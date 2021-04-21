@@ -1,0 +1,101 @@
+version: "3.8"
+services:
+  mongo:
+    image: geppettotest/mongo-local:april2020
+    container_name: mongo-7453
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - ticketapp_7453-volume:/data/db
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: echo 'db.runCommand({serverStatus:1}).ok' | mongo admin -u root -p root --quiet | grep 1
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  camunda:
+    image: geppettodistribution/camunda-local:Jan2021
+    container_name: camunda-7453
+    ports:
+      - "0000:8080"
+
+  authproxy:
+    build: ../../../application/services/default_services/authproxy
+    image: authproxy-7453
+    container_name: authproxy-7453
+    ports:
+      - "0000:8001"
+    env_file: .env
+    depends_on:
+      - mongo
+      - camunda
+
+  securitymanager:
+    build: ../../../application/services/default_services/securitymanager
+    image: securitymanager-7453
+    container_name: securitymanager-7453
+    ports:
+      - "8003:8003"
+    env_file: .env
+    depends_on:
+      - mongo
+      - camunda
+
+  camundaservice:
+    build: ../../../application/services/default_services/camunda
+    image: camundaservice-7453
+    container_name: camundasvc-7453
+    ports:
+      - "8002:8002"
+    env_file: .env
+    depends_on:
+      - mongo
+      - camunda
+      - securitymanager
+
+  apigateway:
+    build: ../../../application/services/custom_services/apigateway
+    image: apigateway-7453
+    container_name: apigateway-7453
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      - camunda
+      - camundaservice
+      - authproxy
+      - securitymanager
+      - types
+      - tickets
+
+
+
+  types: 
+    build: ../../../application/services/custom_services/types
+    image: types-7453
+    container_name: types-7453
+    ports: 
+      - 8005:8005
+    env_file: .env
+    depends_on:
+      - mongo
+
+  tickets: 
+    build: ../../../application/services/custom_services/tickets
+    image: tickets-7453
+    container_name: tickets-7453
+    ports: 
+      - 8006:8006
+    env_file: .env
+    depends_on:
+      - mongo
+
+
+volumes:
+  ticketapp_7453-volume:
+    driver: local
